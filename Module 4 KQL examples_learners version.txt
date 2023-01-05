@@ -48,7 +48,7 @@ SecurityEvent | where EventID in (4624, 4625)
 
 Extend
 
-\\ProcessName
+//ProcessName
 SecurityEvent
 | where ProcessName != "" and Process != ""
 | extend StartDir =  substring(ProcessName,0, string_size(ProcessName)-string_size(Process))
@@ -56,7 +56,7 @@ SecurityEvent
 
 Example 2
 
-\\Computer Name Lenght
+//Computer Name Length
 SecurityEvent
 | extend ComputerNameLenght = strlen(Computer)
 |take 20
