@@ -58,7 +58,7 @@ Example 2
 
 //Computer Name Length
 SecurityEvent
-| extend ComputerNameLenght = strlen(Computer)
+| extend ComputerNameLength = strlen(Computer)
 |take 20
 
 
