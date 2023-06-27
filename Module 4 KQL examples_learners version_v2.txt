@@ -1,0 +1,269 @@
+Module 4
+
+KQL examples
+
+
+Search
+
+//search
+search "new"
+|take 20
+
+//search in 
+
+//Search in tables
+search in (SecurityEvent,SecurityAlert,A*) "new"
+|take 20
+
+
+Where 
+
+SecurityEvent
+| where TimeGenerated > ago(1d)
+
+
+SecurityEvent
+| where TimeGenerated > ago(1h) and EventID == "4624"
+
+SecurityEvent
+| where TimeGenerated > ago(1h)
+| where EventID == 4624
+| where AccountType =~ "user"
+
+SecurityEvent | where EventID in (4624, 4625)
+| take 20
+
+Let
+
+//Let for variables
+let timeOffset = 1h;
+let discardEventId = 4688;
+SecurityEvent
+| where TimeGenerated > ago(timeOffset*2) and TimeGenerated < ago(timeOffset)
+| where EventID != discardEventId
+| take 20 //used to limit the results
+
+		4688 = process create event.
+
+
+//Let for table
+let LowActivityAccounts =
+    SecurityEvent 
+    | summarize cnt = count() by Account 
+    | where cnt < 10;
+LowActivityAccounts | where Account contains "sql"
+
+
+Extend
+
+//ProcessName
+SecurityEvent
+| where ProcessName != "" and Process != ""
+| extend StartDir =  substring(ProcessName,0, string_size(ProcessName)-string_size(Process))
+|take 20 
+
+Example 2
+
+//Computer Name Length
+SecurityEvent
+| extend ComputerNameLength = strlen(Computer)
+|take 20
+
+
+Order by operator
+
+SecurityEvent
+| where TimeGenerated > ago(1h)
+| where ProcessName != "" and Process != ""
+| extend StartDir =  substring(ProcessName,0, string_size(ProcessName)-string_size(Process))
+| order by StartDir desc, Process asc
+| take 5
+
+If you want to edit above example 
+SecurityEvent
+| where ProcessName != "" and Process != ""
+| extend StartDir =  substring(ProcessName,0, string_size(ProcessName)-string_size(Process))
+| order by StartDir desc, Process asc
+| project ProcessName, StartDir, Process
+| take 20
+
+
+Project
+Example 1
+SecurityEvent
+| project Computer, Account
+|take 10
+
+Example 2
+
+SecurityEvent
+| where ProcessName != "" and Process != ""
+| extend StartDir =  substring(ProcessName,0, string_size(ProcessName)-string_size(Process))
+| order by StartDir desc, Process asc
+| project-away ProcessName
+|take 10
+
+Example 3
+
+SecurityEvent
+| where ProcessName != "" and Process != ""
+| extend StartDir =  substring(ProcessName,0, string_size(ProcessName)-string_size(Process))
+| order by StartDir desc, Process asc
+| take 5
+|project StartDir, AccountType
+
+Example 4
+SecurityEvent
+| where ProcessName != "" and Process != ""
+| extend StartDir =  substring(ProcessName,0, string_size(ProcessName)-string_size(Process))
+| order by StartDir desc, Process asc
+| take 5
+
+
+Summarize to filter - remember it's case sensitive 
+
+Example 1
+SecurityEvent
+| where TimeGenerated > ago(1h)
+| summarize dcount(IpAddress)
+
+let timeframe = 30d;
+let threshold = 1;
+SigninLogs
+| where TimeGenerated >= ago(timeframe)
+| where ResultDescription has "Invalid password"
+| summarize applicationCount = dcount(AppDisplayName) by UserPrincipalName, IPAddress
+| where applicationCount >= threshold
+
+Example 2
+
+SecurityEvent 
+| where Computer == "SQL10.na.contosohotels.com"
+| summarize arg_max(TimeGenerated,*) by Computer
+
+SecurityEvent 
+| where Computer == "SQL10.na.contosohotels.com"
+| summarize arg_min(TimeGenerated,*) by Computer
+
+
+
+
+Summarize make_list, make_set
+SecurityEvent
+| where EventID == "4624"
+| summarize make_list(Account) by Computer
+|take 20
+
+SecurityEvent
+| where EventID == "4624"
+| summarize make_set(Account) by Computer
+|take 20
+
+
+Visualizations
+
+SecurityEvent 
+| summarize count() by Account
+| render barchart
+Add the |take 20
+
+
+SecurityEvent 
+| summarize count() by bin(TimeGenerated, 1d) 
+| render timechart
+
+
+Union Operator
+
+Example 1 – it’s long running. Add a take 20
+SecurityEvent | union SigninLogs  
+|take 20
+
+Example 2
+SecurityEvent 
+| union SigninLogs  
+| summarize count() 
+| project count_
+|take 20
+
+Example 3 – long running – add a take 20
+SecurityEvent 
+| union (SigninLogs | summarize count()| project count_)
+
+Notice the difference in time between 2 and 3. 
+
+Example 4 - All App tables by count
+union App* 
+| summarize count() by Type
+
+
+Join Operator
+Do do this example 
+SecurityEvent //table name 
+| join Heartbeat on Computer //joining SecurityEvent with Heartbeat on the common Computer column 
+| where EventID == "4688" //Looking for Event ID for new process 
+| project Computer, OSType, OSMajorVersion, Version //Displaying data from both tables
+
+Do not do this example
+SecurityEvent //table name
+| join kind=inner Heartbeat on Computer //joining SecurityEvent with Heartbeat on the common Computer column
+| where EventID == "4688" //Looking for Event ID for new process
+| project Computer, OSType, OSMajorVersion, Version //Displaying data from both tables
+
+
+
+SecurityEvent 
+| where EventID == "4624" 
+| summarize LogOnCount=count() by EventID, Account 
+| project LogOnCount, Account 
+| join kind = inner (
+     SecurityEvent 
+     | where EventID == "4634" 
+     | summarize LogOffCount=count() by EventID, Account 
+     | project LogOffCount, Account 
+) on Account
+
+
+
+
+Example 1
+print extract("x=([0-9.]+)", 1, "hello x=45.6|wo") == "45.6"
+
+
+
+Example 2 - Change the timeframe
+SecurityEvent
+| where EventID == 4672 and AccountType == 'User'
+| extend Account_Name = extract(@"^(.*\\)?([^@]*)(@.*)?$", 2, tolower(Account))
+| summarize LoginCount = count() by Account_Name
+| where Account_Name != ""
+| where LoginCount < 10
+
+
+Parse
+
+let Traces = datatable(EventText:string)
+[
+"Event: NotifySliceRelease (resourceName=PipelineScheduler, totalSlices=27, sliceNumber=23, lockTime=02/17/2016 08:40:01, releaseTime=02/17/2016 08:40:01, previousLockTime=02/17/2016 08:39:01)"
+];
+Traces  
+| parse EventText with * "resourceName=" resourceName ", totalSlices=" totalSlices:long * "sliceNumber=" sliceNumber:long * "lockTime=" lockTime ", releaseTime=" releaseTime:date "," * "previousLockTime=" previousLockTime:date ")" *  
+| project resourceName, totalSlices, sliceNumber, lockTime, releaseTime, previousLockTime
+
+
+Structured data extract
+
+SigninLogs 
+| extend OS = DeviceDetail.operatingSystem
+|take 20
+
+JSON data
+SigninLogs
+| extend AuthDetails =  todynamic(AuthenticationDetails) 
+| extend AuthMethod =  AuthDetails[0].authenticationMethod 
+| extend AuthResult = AuthDetails[0].["authenticationStepResultDetail"] 
+| project AuthMethod, AuthResult, AuthDetails 
+
+
+
+
